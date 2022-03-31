@@ -17,20 +17,42 @@ job_idle_workers = dict()
 job_busy_workers = dict()
 job_delegated = dict()
 job_completed = dict()
-job_target_state = dict()
 
 def hash_job(job_object):
 	return hashlib.md5(json.dumps(job_object, sort_keys=True).encode()).hexdigest()
 
+def has_job_completed_execution(job_id, job_object=None, is_root_call=True, current_state=(0,0,0)):
+	assert job_id in active_jobs.keys()
+	if job_object is None:
+		job_object = active_jobs[job_id]
 
-def get_target_state_for_job(job_object, is_root_call=True, result=(0,0,0)):
 	if job_object["type"] == "execute":
-		result = (result[0] + 1, result[1], result[2])
+		current_state = (current_state[0] + 1, current_state[1], current_state[2])
+		if current_state not in job_completed[job_id]:
+			return False, None
 	elif job_object["type"] == "sequence_group":
-		result = (result[0], result[1] + 1, result[2])
+		current_state = (current_state[0], current_state[1] + 1, current_state[2])
 		for i in range(len(job_object["work"])):
-			result = get_target_state_for_job(job_object["work"][i], False, result)
-	return result
+			res, current_state = has_job_completed_execution(job_id, job_object["work"][i], False, current_state)
+			if not res:
+				if is_root_call:
+					return False
+				else:
+					return False, current_state
+	elif job_object["type"] == "parallel_group":
+		current_state = (current_state[0], current_state[1], current_state[2] + 1)
+		for i in range(len(job_object["work"])):
+			res, current_state = has_job_completed_execution(job_id, job_object["work"][i], False, current_state)
+			if not res:
+				if is_root_call:
+					return False
+				else:
+					return False, current_state
+
+	if is_root_call:
+		return True
+	else:
+		return True, current_state
 
 def get_number_of_required_workers_for_job(job_object, is_root_call=True):
 
@@ -55,7 +77,9 @@ def get_number_of_required_workers_for_job(job_object, is_root_call=True):
 		# 	temp = [0 if x is None else x for x in children]
 
 		temp = [0 if x is None else x for x in children]
-		return sum(temp)
+		res = 1 if any(x is 0 for x in temp) else 0
+		res += sum(temp)
+		return res
 
 
 	if job_object["type"] == "sequence_group":
@@ -87,10 +111,10 @@ def try_to_delegate_for_job(job_id, job_object=None, current_state=(0,0,0)):
 				requests.post(target_url, json={'commands': [job_object["command"]], 'state': repr(current_state), 'job_id': job_id})
 				job_busy_workers[job_id].add(target_worker)
 				job_delegated[job_id].add(current_state)
-				return True, None # could delegate
+				return True, current_state # could delegate
 			else:
 				print(f"No idle workers to delegate work to")
-				return False, None # couldn't delegate
+				return False, current_state # couldn't delegate
 		else:
 			print(f"Skipping already delegated state: {current_state}")
 			return None, current_state # don't have to delegate
@@ -108,13 +132,41 @@ def try_to_delegate_for_job(job_id, job_object=None, current_state=(0,0,0)):
 		# sequence work has been completed if we reach this point
 		return None, current_state
 
-	# if job_object["type"] == "parallel_group":
-	return None, current_state
+	if job_object["type"] == "parallel_group":
+
+		current_state = (current_state[0], current_state[1], current_state[2] + 1)
+
+		if current_state not in job_delegated[job_id]:
+			parallel_group_state = current_state
+			required_workers_for_job = get_number_of_required_workers_for_job(job_object)
+			if len(job_idle_workers[job_id]) >= required_workers_for_job:
+				delegation_results = []
+				for i in range(len(job_object["work"])):
+					could_delegate, current_state = try_to_delegate_for_job(job_id, job_object["work"][i], current_state)
+					delegation_results.append(could_delegate)
+
+				assert all(x == True for x in delegation_results)
+				job_delegated[job_id].add(parallel_group_state)
+				return True, current_state
+			else:
+				print(f"Not enough idle workers to delegate work to, required {required_workers_for_job}")
+				return False, current_state # couldn't delegate
+
+		else:
+			for i in range(len(job_object["work"])):
+				could_delegate, current_state = try_to_delegate_for_job(job_id, job_object["work"][i], current_state)
+				if could_delegate is not None:
+					return could_delegate, current_state
+
+			# parallel work has been completed if we reach this point
+			return None, current_state
+
+	assert False
 
 
 def on_worker_finished_work(job_id):
 	could_delegate, current_state = try_to_delegate_for_job(job_id)
-	if could_delegate is None and current_state is not None and current_state == job_target_state[job_id]:
+	if could_delegate is None and has_job_completed_execution(job_id):
 		print(f"Finished job: {job_id}")
 
 		assert len(job_busy_workers[job_id]) == 0
@@ -125,7 +177,6 @@ def on_worker_finished_work(job_id):
 		del job_busy_workers[job_id]
 		del job_delegated[job_id]
 		del job_completed[job_id]
-		del job_target_state[job_id]
 
 		del active_jobs[job_id]
 
@@ -154,7 +205,6 @@ def try_to_start_jobs():
 		job_busy_workers[job_id] = set()
 		job_delegated[job_id] = set()
 		job_completed[job_id] = set()
-		job_target_state[job_id] = get_target_state_for_job(job_object)
 
 		try_to_delegate_for_job(job_id)
 
@@ -189,7 +239,8 @@ def jobs():
 		return "", 200
 	elif flask.request.method == 'PUT':
 		json_object = flask.request.json
-		job_completed[json_object["job_id"]] = eval(json_object["state"])
+		job_completed[json_object["job_id"]].add(eval(json_object["state"]))
+		print(f"Job completed updated: {list(job_completed[json_object['job_id']])}")
 
 		job_busy_workers[json_object["job_id"]].remove(f"{json_object['host']}:{json_object['port']}")
 		job_idle_workers[json_object["job_id"]].add(f"{json_object['host']}:{json_object['port']}")
