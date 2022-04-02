@@ -77,7 +77,7 @@ def get_number_of_required_workers_for_job(job_object, is_root_call=True):
 		# 	temp = [0 if x is None else x for x in children]
 
 		temp = [0 if x is None else x for x in children]
-		res = 1 if any(x is 0 for x in temp) else 0
+		res = 1 if any(x == 0 for x in temp) else 0
 		res += sum(temp)
 		return res
 
