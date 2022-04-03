@@ -33,7 +33,7 @@ def has_job_completed_execution(job_id, job_object=None, is_root_call=True, curr
 	if job_object["type"] == "execute":
 		current_state = (current_state[0] + 1, current_state[1], current_state[2])
 		if current_state not in job_completed[job_id]:
-			return False, None
+			return False, current_state
 	elif job_object["type"] == "sequence_group":
 		current_state = (current_state[0], current_state[1] + 1, current_state[2])
 		for i in range(len(job_object["work"])):
@@ -57,6 +57,89 @@ def has_job_completed_execution(job_id, job_object=None, is_root_call=True, curr
 		return True
 	else:
 		return True, current_state
+
+
+def has_parallel_group_completed_execution(job_id, parallel_group_state, job_object=None, is_root_call=True, current_state=(0,0,0)):
+
+	assert job_id in active_jobs.keys()
+	if job_object is None:
+		job_object = active_jobs[job_id]
+
+	if job_object["type"] == "execute":
+		current_state = (current_state[0] + 1, current_state[1], current_state[2])
+		if is_root_call:
+			return None
+		return None, current_state
+
+	elif job_object["type"] == "sequence_group":
+		current_state = (current_state[0], current_state[1] + 1, current_state[2])
+		for i in range(len(job_object["work"])):
+			res, current_state = has_parallel_group_completed_execution(job_id, parallel_group_state, job_object["work"][i], False, current_state)
+			if res is not None:
+				if is_root_call:
+					return res
+				return res, current_state
+
+	elif job_object["type"] == "parallel_group":
+		current_state = (current_state[0], current_state[1], current_state[2] + 1)
+		if current_state == parallel_group_state:
+			for i in range(len(job_object["work"])):
+				child_res, current_state = has_job_completed_execution(job_id, job_object["work"][i], False, current_state)
+				if not child_res:
+					if is_root_call:
+						return False
+					return False, current_state
+			if is_root_call:
+				return True
+			return True, current_state
+
+		else:
+			for i in range(len(job_object["work"])):
+				res, current_state = has_parallel_group_completed_execution(job_id, parallel_group_state, job_object["work"][i], False, current_state)
+				if res is not None:
+					if is_root_call:
+						return res
+					return res, current_state
+
+
+def state_is_in_state(job_id, child, parent, job_object=None, is_root_call=True, current_state=(0,0,0), entered_parent_state=False):
+
+	assert job_id in active_jobs.keys()
+	if job_object is None:
+		job_object = active_jobs[job_id]
+
+	if job_object["type"] == "execute":
+		current_state = (current_state[0] + 1, current_state[1], current_state[2])
+
+		if current_state == parent:
+			entered_parent_state = True
+
+		if current_state == child and entered_parent_state:
+			if is_root_call:
+				return True
+			return True, current_state
+
+	else:
+		current_state = (current_state[0], current_state[1] + (1 if job_object["type"] == "sequence_group" else 0), current_state[2] + (1 if job_object["type"] == "parallel_group" else 0))
+
+		if current_state == parent:
+			entered_parent_state = True
+
+		if current_state == child and entered_parent_state:
+			if is_root_call:
+				return True
+			return True, current_state
+
+		for i in range(len(job_object["work"])):
+			res, current_state = state_is_in_state(job_id, child, parent, job_object["work"][i], False, current_state, entered_parent_state)
+			if res:
+				if is_root_call:
+					return True
+				return True, current_state
+
+	if is_root_call:
+		return False
+	return False, current_state
 
 
 def get_required_workers_for_job(job_object, is_root_call=True, worker_set=set()):
@@ -116,7 +199,7 @@ def jump_to_next_parallel_branch(job_id, from_location, job_object=None, is_root
 
 
 
-def try_to_delegate_for_job(job_id, job_object=None, current_state=(0,0,0), worker_name="default_worker_name", delegating_parallel_group=False):
+def try_to_delegate_for_job(job_id, last_completed_state=None, job_object=None, current_state=(0,0,0), worker_name="default_worker_name", delegating_parallel_group=False):
 
 	assert job_id in active_jobs.keys()
 	if job_object is None:
@@ -152,7 +235,7 @@ def try_to_delegate_for_job(job_id, job_object=None, current_state=(0,0,0), work
 		current_state = (current_state[0], current_state[1] + 1, current_state[2])
 
 		for i in range(len(job_object["work"])):
-			could_delegate, current_state, child_worker_name = try_to_delegate_for_job(job_id, job_object["work"][i], current_state, worker_name, delegating_parallel_group)
+			could_delegate, current_state, child_worker_name = try_to_delegate_for_job(job_id, last_completed_state, job_object["work"][i], current_state, worker_name, delegating_parallel_group)
 			if could_delegate is not None:
 				return could_delegate, current_state, worker_name
 
@@ -169,7 +252,7 @@ def try_to_delegate_for_job(job_id, job_object=None, current_state=(0,0,0), work
 			if all(len(job_worker_status[job_id][x]) == 0 for x in parallel_group_workers): # check if the workers supposed to run this are not busy
 				delegation_results = []
 				for i in range(len(job_object["work"])):
-					delegation_result = try_to_delegate_for_job(job_id, job_object["work"][i], current_state, worker_name, True)
+					delegation_result = try_to_delegate_for_job(job_id, last_completed_state, job_object["work"][i], current_state, worker_name, True)
 					delegation_results.append(delegation_result)
 					current_state = jump_to_next_parallel_branch(job_id, delegation_result[1]) # skip contents of branch of parallel work
 
@@ -186,19 +269,30 @@ def try_to_delegate_for_job(job_id, job_object=None, current_state=(0,0,0), work
 				return False, current_state, worker_name # couldn't delegate
 
 		else:
-			for i in range(len(job_object["work"])):
-				could_delegate, current_state, child_worker_name = try_to_delegate_for_job(job_id, job_object["work"][i], current_state, worker_name, True)
-				if could_delegate is not None:
+			if has_parallel_group_completed_execution(job_id, current_state):
+				for i in range(len(job_object["work"])): # skip all states in parallel branches
+					child_state = (current_state[0] + (1 if job_object["work"][i]["type"] == "execute" else 0), current_state[1] + (1 if job_object["work"][i]["type"] == "sequence_group" else 0), current_state[2] + (1 if job_object["work"][i]["type"] == "parallel_group" else 0))
+					current_state = jump_to_next_parallel_branch(job_id, child_state) # skip contents of branch of parallel work
+				return None, current_state, worker_name
+			else:
+				for i in range(len(job_object["work"])):
+					child_state = (current_state[0] + (1 if job_object["work"][i]["type"] == "execute" else 0), current_state[1] + (1 if job_object["work"][i]["type"] == "sequence_group" else 0), current_state[2] + (1 if job_object["work"][i]["type"] == "parallel_group" else 0))
+					assert last_completed_state is not None
+					if not state_is_in_state(job_id, last_completed_state, child_state):
+						current_state = jump_to_next_parallel_branch(job_id, child_state) # skip contents of branch of parallel work
+						print(f"Skipping parallel group branch at {child_state} as it doesn't contain {last_completed_state}")
+						continue
+					could_delegate, current_state, child_worker_name = try_to_delegate_for_job(job_id, last_completed_state, job_object["work"][i], current_state, worker_name, True)
+					# if could_delegate is not None:
+					# assert could_delegate is not None
 					return could_delegate, current_state, worker_name
 
-			# parallel work has been completed if we reach this point
-			return None, current_state, worker_name
 
 	assert False
 
 
 def on_worker_finished_work(job_id, state):
-	could_delegate, current_state, worker_name = try_to_delegate_for_job(job_id)
+	could_delegate, current_state, worker_name = try_to_delegate_for_job(job_id, state)
 	if could_delegate is None and has_job_completed_execution(job_id):
 		print(f"Finished job: {job_id}")
 

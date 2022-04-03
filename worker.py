@@ -23,7 +23,7 @@ def run_from_object(run_object):
 	request_json = {'job_id': run_object["job_id"], 'state': run_object["state"], 'host': host, 'port': port}
 	requests.put(f'http://{scheduler_host}:{scheduler_port}/jobs', json=request_json)
 	print("Put request to scheduler done:")
-	print(json.dumps(request_json, indent=4))
+	# print(json.dumps(request_json, indent=4))
 
 
 def run_from_file(file_path):
@@ -35,8 +35,8 @@ def run_from_file(file_path):
 @app.route("/run", methods=['POST'])
 def run():
 	post_object = flask.request.json
-	print("Running:")
-	print(json.dumps(post_object, indent=4))
+	# print("Running:")
+	# print(json.dumps(post_object, indent=4))
 	x = threading.Thread(target=run_from_object, args=(post_object,))
 	x.start()
 	return "", 200
