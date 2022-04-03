@@ -215,16 +215,12 @@ def try_to_delegate_for_job(job_id, last_completed_state=None, job_object=None, 
 
 		if current_state not in job_delegated[job_id]:
 			target_worker = job_worker_names[job_id][worker_name]
-			if delegating_parallel_group or len(job_worker_status[job_id][target_worker]) == 0: # check if the worker supposed to run this is not busy
-				target_url = f'http://{target_worker}/run'
-				print(f"Delegating work to {target_url}")
-				requests.post(target_url, json={'command': job_object["command"], 'state': repr(current_state), 'job_id': job_id})
-				job_worker_status[job_id][target_worker].add(current_state)
-				job_delegated[job_id].add(current_state)
-				return True, current_state, worker_name # could delegate
-			else:
-				print(f"No idle workers to delegate work to")
-				return False, current_state, worker_name # couldn't delegate
+			target_url = f'http://{target_worker}/run'
+			print(f"Delegating work to {target_url}")
+			requests.post(target_url, json={'command': job_object["command"], 'state': repr(current_state), 'job_id': job_id})
+			job_worker_status[job_id][target_worker].add(current_state)
+			job_delegated[job_id].add(current_state)
+			return True, current_state, worker_name # could delegate
 		else:
 			print(f"Skipping already delegated state: {current_state}")
 			return None, current_state, worker_name # don't have to delegate
@@ -248,25 +244,20 @@ def try_to_delegate_for_job(job_id, last_completed_state=None, job_object=None, 
 
 		if current_state not in job_delegated[job_id]:
 			parallel_group_state = current_state
-			parallel_group_workers = [job_worker_names[job_id][x] for x in  get_required_workers_for_job(job_object)]
-			if all(len(job_worker_status[job_id][x]) == 0 for x in parallel_group_workers): # check if the workers supposed to run this are not busy
-				delegation_results = []
-				for i in range(len(job_object["work"])):
-					delegation_result = try_to_delegate_for_job(job_id, last_completed_state, job_object["work"][i], current_state, worker_name, True)
-					delegation_results.append(delegation_result)
-					current_state = jump_to_next_parallel_branch(job_id, delegation_result[1]) # skip contents of branch of parallel work
+			delegation_results = []
+			for i in range(len(job_object["work"])):
+				delegation_result = try_to_delegate_for_job(job_id, last_completed_state, job_object["work"][i], current_state, worker_name, True)
+				delegation_results.append(delegation_result)
+				current_state = jump_to_next_parallel_branch(job_id, delegation_result[1]) # skip contents of branch of parallel work
 
-				for could_delegate, child_state, child_worker_name in delegation_results:
-					child_worker = job_worker_names[job_id][child_worker_name]
-					job_worker_status[job_id][child_worker].add(child_state)
-					job_delegated[job_id].add(child_state)
+			for could_delegate, child_state, child_worker_name in delegation_results:
+				child_worker = job_worker_names[job_id][child_worker_name]
+				job_worker_status[job_id][child_worker].add(child_state)
+				job_delegated[job_id].add(child_state)
 
-				assert all(x[0] == True for x in delegation_results)
-				job_delegated[job_id].add(parallel_group_state) # special usage of job_delegated for parallel groups
-				return True, current_state, worker_name
-			else:
-				print("Workers required to run parallel group were busy, waiting for next event")
-				return False, current_state, worker_name # couldn't delegate
+			assert all(x[0] == True for x in delegation_results)
+			job_delegated[job_id].add(parallel_group_state) # special usage of job_delegated for parallel groups
+			return True, current_state, worker_name
 
 		else:
 			if has_parallel_group_completed_execution(job_id, current_state):
