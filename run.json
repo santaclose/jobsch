@@ -1,0 +1,5 @@
+{
+	"command": ["python", "dummy.py", "20"],
+	"state": "(0,0,0)",
+	"job_id": null
+}

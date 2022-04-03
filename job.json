@@ -1,0 +1,50 @@
+{
+	"type": "parallel_group",
+	"work":
+	[
+		{
+			"type": "sequence_group",
+			"worker": "1",
+			"work":
+			[
+				{
+					"type": "execute",
+					"command": ["python", "dummy.py", "1"]
+				},
+				{
+					"type": "parallel_group",
+					"work":
+					[
+						{
+							"type": "execute",
+							"command": ["python", "dummy.py", "3"]
+						},
+						{
+							"type": "execute",
+							"command": ["python", "dummy.py", "3"]
+						}
+					]
+				},
+				{
+					"type": "execute",
+					"command": ["python", "dummy.py", "1"]
+				}
+			]
+		},
+		{
+			"type": "sequence_group",
+			"worker": "0",
+			"work":
+			[
+				{
+					"type": "execute",
+					"command": ["python", "dummy.py", "2"]
+				},
+				{
+					"type": "execute",
+					"command": ["python", "dummy.py", "2"]
+				}
+			]
+		}
+	]
+}
