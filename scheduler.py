@@ -19,6 +19,7 @@ job_worker_status = dict()
 job_delegated = dict()
 job_completed = dict()
 
+lock = threading.Lock()
 
 def hash_job(job_object):
 	return hashlib.md5(json.dumps(job_object, sort_keys=True).encode()).hexdigest()
@@ -282,26 +283,6 @@ def try_to_delegate_for_job(job_id, last_completed_state=None, job_object=None, 
 	assert False
 
 
-def on_worker_finished_work(job_id, state):
-	could_delegate, current_state, worker_name = try_to_delegate_for_job(job_id, state)
-	if could_delegate is None and has_job_completed_execution(job_id):
-		print(f"Finished job: {job_id}")
-
-		assert all(len(job_worker_status[job_id][k]) == 0 for k in job_worker_status[job_id].keys()) # none of the workers should be busy
-
-		while len(job_workers[job_id]) > 0:
-			available_workers.add(job_workers[job_id].pop())
-
-		del job_workers[job_id]
-		del job_worker_status[job_id]
-		del job_delegated[job_id]
-		del job_completed[job_id]
-
-		del active_jobs[job_id]
-
-		try_to_start_jobs()
-
-
 def try_to_start_jobs():
 
 	for i in reversed(range(len(pending_jobs_order))):
@@ -335,15 +316,60 @@ def try_to_start_jobs():
 		try_to_delegate_for_job(job_id)
 
 
+def on_worker_finished_work(job_id, worker, state):
+	with lock:
+		job_completed[job_id].add(state)
+		print(f"Job completed updated: {list(job_completed[job_id])}")
+
+		job_worker_status[job_id][worker].remove(state)
+
+		if len(job_worker_status[job_id][worker]) == 0:
+			print(f"Worker '{worker}' not busy anymore")
+
+
+		could_delegate, current_state, worker_name = try_to_delegate_for_job(job_id, state)
+		if could_delegate is None and has_job_completed_execution(job_id):
+			print(f"Finished job: {job_id}")
+
+			assert all(len(job_worker_status[job_id][k]) == 0 for k in job_worker_status[job_id].keys()) # none of the workers should be busy
+
+			while len(job_workers[job_id]) > 0:
+				available_workers.add(job_workers[job_id].pop())
+
+			del job_workers[job_id]
+			del job_worker_status[job_id]
+			del job_delegated[job_id]
+			del job_completed[job_id]
+
+			del active_jobs[job_id]
+
+			try_to_start_jobs()
+
+
+def on_worker_connected(worker):
+	with lock:
+		available_workers.add(worker)
+		try_to_start_jobs()
+
+
+def on_job_added(job_object):
+	with lock:
+		job_object["request_time"] = datetime.datetime.utcnow().strftime("%d-%b-%Y (%H:%M:%S.%f)")
+		job_id = hash_job(job_object)
+
+		pending_jobs[job_id] = job_object
+		pending_jobs_order.append(job_id)
+
+		try_to_start_jobs()
+
+
 @app.route('/workers', methods=['GET', 'POST'])
 def workers():
 	if flask.request.method == 'POST':
 		json_object = flask.request.json
-		available_workers.add(f"{json_object['host']}:{json_object['port']}")
-
-		# try_to_start_jobs()
+		worker = f"{json_object['host']}:{json_object['port']}"
 		
-		x = threading.Thread(target=try_to_start_jobs)
+		x = threading.Thread(target=on_worker_connected, args=(worker,))
 		x.start()
 
 		return "", 200
@@ -355,28 +381,16 @@ def workers():
 def jobs():
 	if flask.request.method == 'POST':
 		json_object = flask.request.json
-		json_object["request_time"] = datetime.datetime.utcnow().strftime("%d-%b-%Y (%H:%M:%S.%f)")
-		job_id = hash_job(json_object)
 
-		pending_jobs[job_id] = json_object
-		pending_jobs_order.append(job_id)
-
-		try_to_start_jobs()
+		x = threading.Thread(target=on_job_added, args=(json_object,))
+		x.start()
 
 		return "", 200
 	elif flask.request.method == 'PUT':
 		json_object = flask.request.json
-		job_completed[json_object["job_id"]].add(eval(json_object["state"]))
-		print(f"Job completed updated: {list(job_completed[json_object['job_id']])}")
-
 		worker = f"{json_object['host']}:{json_object['port']}"
 
-		job_worker_status[json_object["job_id"]][worker].remove(eval(json_object["state"]))
-
-		if len(job_worker_status[json_object["job_id"]][worker]) == 0:
-			print(f"Worker '{worker}' not busy anymore")
-
-		x = threading.Thread(target=on_worker_finished_work, args=(json_object["job_id"], eval(json_object["state"])))
+		x = threading.Thread(target=on_worker_finished_work, args=(json_object["job_id"], worker, eval(json_object["state"]),))
 		x.start()
 
 		return "", 200
