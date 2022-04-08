@@ -311,10 +311,10 @@ def try_to_start_jobs():
 
 		chosen_workers = [available_workers.pop() for i in range(len(required_worker_names))]
 		job_workers[job_id] = set(chosen_workers)
-		for i, item in enumerate(required_worker_names):
+		for i, worker_name in enumerate(required_worker_names):
 			if job_id not in job_worker_names.keys():
 				job_worker_names[job_id] = dict()
-			job_worker_names[job_id][item] = chosen_workers[i]
+			job_worker_names[job_id][worker_name] = chosen_workers[i]
 
 		job_worker_status[job_id] = dict()
 		for worker in chosen_workers:
@@ -349,6 +349,7 @@ def on_worker_finished_work(job_id, worker, state):
 				available_workers.add(job_workers[job_id].pop())
 
 			del job_workers[job_id]
+			del job_worker_names[job_id]
 			del job_worker_status[job_id]
 			del job_delegated[job_id]
 			del job_completed[job_id]
@@ -386,7 +387,16 @@ def workers():
 
 		return "", 200
 	else:
-		return json.dumps({"available": list(available_workers), "all": [list(job_workers[k]) for k in job_workers.keys()]}, indent=4)
+		output_json = {
+			"available": list(available_workers),
+			"working": {}
+		}
+		for job_id in job_worker_names.keys():
+			output_json["working"][job_id] = {}
+			for worker_name in job_worker_names[job_id]:
+				output_json["working"][job_id][worker_name] = job_worker_names[job_id][worker_name]
+
+		return json.dumps(output_json, indent=4)
 
 
 @app.route('/jobs', methods=['GET', 'POST', 'PUT'])
