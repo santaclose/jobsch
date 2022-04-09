@@ -1,3 +1,4 @@
+import os
 import sys
 import json
 import flask
@@ -14,8 +15,14 @@ port = None
 
 def run_from_object(run_object):
 
+	# give subprocess info so it can find other stuff executed by other workers
+	process_env = os.environ.copy()
+	process_env["worker_job_id"] = run_object["job_id"]
+	process_env["scheduler_host"] = scheduler_host
+	process_env["scheduler_port"] = scheduler_port
+
 	print(f"Starting process for command '{' '.join(run_object['command'])}'")
-	process = subprocess.Popen(run_object["command"])
+	process = subprocess.Popen(run_object["command"], env=process_env)
 	process.wait()
 	print(f"Process for command '{' '.join(run_object['command'])}' finished.")
 
@@ -23,7 +30,6 @@ def run_from_object(run_object):
 	request_json = {'job_id': run_object["job_id"], 'state': run_object["state"], 'host': host, 'port': port}
 	requests.put(f'http://{scheduler_host}:{scheduler_port}/jobs', json=request_json)
 	print("Put request to scheduler done:")
-	# print(json.dumps(request_json, indent=4))
 
 
 def run_from_file(file_path):
