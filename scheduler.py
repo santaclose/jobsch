@@ -226,7 +226,14 @@ def try_to_delegate_for_job(job_id, last_completed_state=None, job_object=None, 
 			target_worker = job_worker_names[job_id][worker_name]
 			target_url = f'http://{target_worker}/run'
 			print(f"Delegating work {current_state} to worker '{target_url}'")
-			requests.post(target_url, json={'command': job_object["command"], 'state': repr(current_state), 'job_id': job_id})
+			run_object = {
+				"command": job_object["command"],
+				"state": repr(current_state),
+				"job_id": job_id
+			}
+			if "timeout" in job_object.keys():
+				run_object["timeout"] = job_object["timeout"]
+			requests.post(target_url, json=run_object)
 			job_worker_status[job_id][target_worker].add(current_state)
 			job_delegated[job_id].add(current_state)
 			return True, current_state, worker_name # could delegate
@@ -326,10 +333,13 @@ def try_to_start_jobs():
 		try_to_delegate_for_job(job_id)
 
 
-def on_worker_finished_work(job_id, worker, state):
+def on_worker_finished_work(job_id, worker, state, timed_out):
 	with lock:
 
-		print(f"Worker '{worker}' completed work {state}")
+		if timed_out:
+			print(f"Worker '{worker}' timed out at {state}")
+		else:
+			print(f"Worker '{worker}' completed work {state}")
 		job_completed[job_id].add(state)
 		print(f"Job completed updated: {list(job_completed[job_id])}")
 
@@ -412,7 +422,7 @@ def jobs():
 		json_object = flask.request.json
 		worker = f"{json_object['host']}:{json_object['port']}"
 
-		x = threading.Thread(target=on_worker_finished_work, args=(json_object["job_id"], worker, eval(json_object["state"]),))
+		x = threading.Thread(target=on_worker_finished_work, args=(json_object["job_id"], worker, eval(json_object["state"]), json_object["timed_out"],))
 		x.start()
 
 		return "", 200

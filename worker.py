@@ -22,12 +22,21 @@ def run_from_object(run_object):
 	process_env["scheduler_port"] = scheduler_port
 
 	print(f"Starting process for command '{' '.join(run_object['command'])}'")
-	process = subprocess.Popen(run_object["command"], env=process_env)
-	process.wait()
+	timed_out = False
+	try:
+		subprocess.run(run_object["command"], env=process_env, timeout=None if "timeout" not in run_object.keys() else run_object["timeout"])
+	except subprocess.TimeoutExpired:
+		timed_out = True
 	print(f"Process for command '{' '.join(run_object['command'])}' finished.")
 
 	# tell scheduler we completed chunk of work
-	request_json = {'job_id': run_object["job_id"], 'state': run_object["state"], 'host': host, 'port': port}
+	request_json = {
+		'job_id': run_object["job_id"],
+		'state': run_object["state"],
+		'host': host,
+		'port': port,
+		'timed_out': timed_out
+	}
 	requests.put(f'http://{scheduler_host}:{scheduler_port}/jobs', json=request_json)
 	print("Put request to scheduler done:")
 
