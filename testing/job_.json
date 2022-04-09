@@ -1,0 +1,58 @@
+{
+	"type": "parallel_group",
+	"work":
+	[
+		{
+			"type": "sequence_group",
+			"worker": "1",
+			"work":
+			[
+				{
+					"type": "execute",
+					"command": ["python", "testing/dummy.py", "1", "out=testing/a.txt"]
+				},
+				{
+					"type": "parallel_group",
+					"work":
+					[
+						{
+							"type": "execute",
+							"command": ["python", "testing/dummy.py", "3", "in=testing/a.txt", "out=testing/b.txt"]
+						},
+						{
+							"type": "execute",
+							"command": ["python", "testing/dummy.py", "10", "in=testing/a.txt", "out=testing/c.txt"]
+						},
+						{
+							"type": "execute",
+							"command": ["python", "testing/dummy.py", "1", "in=testing/a.txt", "out=testing/d.txt"]
+						}
+					]
+				},
+				{
+					"type": "execute",
+					"command": ["python", "testing/dummy.py", "1", "in=testing/a.txt,testing/b.txt,testing/c.txt,testing/d.txt"]
+				}
+			]
+		},
+		{
+			"type": "sequence_group",
+			"worker": "0",
+			"work":
+			[
+				{
+					"type": "execute",
+					"command": ["python", "testing/dummy.py", "2", "out=testing/0.txt"]
+				},
+				{
+					"type": "execute",
+					"command": ["python", "testing/dummy.py", "2", "in=testing/0.txt"]
+				},
+				{
+					"type": "execute",
+					"command": ["curl", "https://raw.githubusercontent.com/santaclose/noose/master/premake5.lua", "--output", "testing/premake5.lua"]
+				}
+			]
+		}
+	]
+}

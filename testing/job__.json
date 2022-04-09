@@ -1,0 +1,69 @@
+{
+	"type": "sequence_group",
+	"work":
+	[
+		{
+			"type": "parallel_group",
+			"work":
+			[
+				{
+					"type": "execute",
+					"worker": "server 0",
+					"command": ["python", "testing/dummy.py", "2"]
+				},
+				{
+					"type": "execute",
+					"worker": "client 0",
+					"command": ["python", "testing/dummy.py", "4"]
+				},
+				{
+					"type": "execute",
+					"worker": "client 1",
+					"command": ["python", "testing/dummy.py", "3"]
+				}
+			]
+		},
+		{
+			"type": "parallel_group",
+			"work":
+			[
+				{
+					"type": "execute",
+					"worker": "server 0",
+					"command": ["python", "testing/dummy.py", "5"]
+				},
+				{
+					"type": "execute",
+					"worker": "client 0",
+					"command": ["python", "testing/dummy.py", "5"]
+				},
+				{
+					"type": "execute",
+					"worker": "client 1",
+					"command": ["python", "testing/dummy.py", "5"]
+				}
+			]
+		},
+		{
+			"type": "parallel_group",
+			"work":
+			[
+				{
+					"type": "execute",
+					"worker": "server 0",
+					"command": ["python", "testing/dummy.py", "1"]
+				},
+				{
+					"type": "execute",
+					"worker": "client 0",
+					"command": ["python", "testing/dummy.py", "1"]
+				},
+				{
+					"type": "execute",
+					"worker": "client 1",
+					"command": ["python", "testing/dummy.py", "1"]
+				}
+			]
+		}
+	]
+}
