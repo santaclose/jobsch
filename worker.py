@@ -27,6 +27,8 @@ def run_from_object(run_object):
 		subprocess.run(run_object["command"], env=process_env, timeout=None if "timeout" not in run_object.keys() else run_object["timeout"])
 	except subprocess.TimeoutExpired:
 		timed_out = True
+	except Exception as e:
+		print(f"Unexpected exception '{repr(e)}'")
 	print(f"Process for command '{' '.join(run_object['command'])}' finished.")
 
 	# tell scheduler we completed chunk of work
