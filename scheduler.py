@@ -417,7 +417,7 @@ def jobs():
 		x = threading.Thread(target=on_job_added, args=(job_id, job_object,))
 		x.start()
 
-		return json.dumps({"job_id": job_id})
+		return json.dumps({"job_id": job_id}, indent=4)
 	elif flask.request.method == 'PUT':
 		json_object = flask.request.json
 		worker = f"{json_object['host']}:{json_object['port']}"
