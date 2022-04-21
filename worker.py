@@ -21,7 +21,9 @@ def run_from_object(run_object):
 	process_env["scheduler_host"] = scheduler_host
 	process_env["scheduler_port"] = scheduler_port
 
-	print(f"Starting process for command '{' '.join(run_object['command'])}'")
+	command_string = ' '.join(run_object['command']) if isinstance(run_object['command'], list) else run_object['command']
+
+	print(f"Starting process for command '{command_string}'")
 	timed_out = False
 	try:
 		subprocess.run(run_object["command"], env=process_env, timeout=None if "timeout" not in run_object.keys() else run_object["timeout"])
@@ -29,7 +31,7 @@ def run_from_object(run_object):
 		timed_out = True
 	except Exception as e:
 		print(f"Unexpected exception '{repr(e)}'")
-	print(f"Process for command '{' '.join(run_object['command'])}' finished.")
+	print(f"Process for command '{command_string}' finished.")
 
 	# tell scheduler we completed chunk of work
 	request_json = {
