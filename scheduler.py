@@ -375,11 +375,8 @@ def on_worker_connected(worker):
 		try_to_start_jobs()
 
 
-def on_job_added(job_object):
+def on_job_added(job_id, job_object):
 	with lock:
-		job_object["request_time"] = datetime.datetime.utcnow().strftime("%d-%b-%Y (%H:%M:%S.%f)")
-		job_id = hash_job(job_object)
-
 		pending_jobs[job_id] = job_object
 		pending_jobs_order.append(job_id)
 
@@ -412,12 +409,15 @@ def workers():
 @app.route('/jobs', methods=['GET', 'POST', 'PUT'])
 def jobs():
 	if flask.request.method == 'POST':
-		json_object = flask.request.json
+		job_object = flask.request.json
 
-		x = threading.Thread(target=on_job_added, args=(json_object,))
+		job_object["request_time"] = datetime.datetime.utcnow().strftime("%d-%b-%Y (%H:%M:%S.%f)")
+		job_id = hash_job(job_object)
+
+		x = threading.Thread(target=on_job_added, args=(job_id, job_object,))
 		x.start()
 
-		return "", 200
+		return json.dumps({"job_id": job_id})
 	elif flask.request.method == 'PUT':
 		json_object = flask.request.json
 		worker = f"{json_object['host']}:{json_object['port']}"
