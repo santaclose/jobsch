@@ -307,7 +307,8 @@ def try_to_start_jobs():
 		job_object = pending_jobs[job_id]
 
 		required_worker_names = get_required_workers_for_job(job_object)
-		if len(available_workers) < len(required_worker_names):
+		number_of_required_workers = len(required_worker_names)
+		if len(available_workers) < number_of_required_workers:
 			continue
 
 		# Start working on this job
