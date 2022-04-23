@@ -30,7 +30,7 @@ def run_from_object(run_object):
 
 	command_string = ' '.join(run_object['command']) if isinstance(run_object['command'], list) else run_object['command']
 
-	print(f"Starting process for command '{command_string}'")
+	print(f"[worker] Starting process for command '{command_string}'")
 	timed_out = False
 	try:
 		process = subprocess.Popen(run_object["command"], env=process_env)
@@ -40,15 +40,15 @@ def run_from_object(run_object):
 		with lock:
 			active_processes.remove(process)
 			if killing_processes:
-				print("Process was killed")
+				print("[worker] Process was killed")
 				return
 		
 	except subprocess.TimeoutExpired:
 		timed_out = True
 	except Exception as e:
-		print(f"Unexpected exception '{repr(e)}'")
+		print(f"[worker] Unexpected exception '{repr(e)}'")
 
-	print(f"Process for command '{command_string}' {'timed out' if timed_out else 'finished'}")
+	print(f"[worker] Process for command '{command_string}' {'timed out' if timed_out else 'finished'}")
 
 	# tell scheduler we completed chunk of work
 	request_json = {
@@ -59,7 +59,7 @@ def run_from_object(run_object):
 		'timed_out': timed_out
 	}
 	requests.put(f'http://{scheduler_host}:{scheduler_port}/jobs', json=request_json)
-	print("Put request to scheduler done")
+	print("[worker] Put request to scheduler done")
 
 
 def run_from_file(file_path):
@@ -101,7 +101,7 @@ def hello_world():
 
 if __name__ == '__main__':
 	if len(sys.argv) < 4:
-		print("Run: worker.py port scheduler_host scheduler_port")
+		print("[worker] Run: worker.py port scheduler_host scheduler_port")
 		exit()
 		
 	host = socket.gethostbyname(socket.gethostname())

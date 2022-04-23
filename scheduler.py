@@ -225,7 +225,7 @@ def try_to_delegate_for_job(job_id, last_completed_state=None, job_object=None, 
 		if current_state not in job_delegated[job_id]:
 			target_worker = job_worker_names[job_id][worker_name]
 			target_url = f'http://{target_worker}/run'
-			print(f"Delegating work {current_state} to worker '{target_url}'")
+			print(f"[scheduler] Delegating work {current_state} to worker '{target_url}'")
 			run_object = {
 				"command": job_object["command"],
 				"state": repr(current_state),
@@ -238,7 +238,7 @@ def try_to_delegate_for_job(job_id, last_completed_state=None, job_object=None, 
 			job_delegated[job_id].add(current_state)
 			return True, current_state, worker_name # could delegate
 		else:
-			print(f"Skipping already delegated state: {current_state}")
+			print(f"[scheduler] Skipping already delegated state: {current_state}")
 			return None, current_state, worker_name # don't have to delegate
 
 
@@ -284,18 +284,18 @@ def try_to_delegate_for_job(job_id, last_completed_state=None, job_object=None, 
 					# find which branch we are in
 					if not state_is_in_state(job_id, last_completed_state, child_state):
 						current_state = jump_to_next_parallel_branch(job_id, child_state) # skip contents of branch of parallel work
-						print(f"Skipping parallel group branch at {child_state} as it doesn't contain {last_completed_state}")
+						print(f"[scheduler] Skipping parallel group branch at {child_state} as it doesn't contain {last_completed_state}")
 						continue
 					could_delegate, current_state, child_worker_name = try_to_delegate_for_job(job_id, last_completed_state, job_object["work"][i], current_state, worker_name)
 					
 					if could_delegate is None: # whole branch has been completely delegated
-						print("Not delegating work")
+						print("[scheduler] Not delegating work")
 						return False, current_state, worker_name
 
 					return could_delegate, current_state, worker_name
 
 
-	print("|||||||||||||| ISSUE ||||||||||||||")
+	print("[scheduler] |||||||||||||| ISSUE ||||||||||||||")
 	assert False
 
 
@@ -312,7 +312,7 @@ def try_to_start_jobs():
 			continue
 
 		# Start working on this job
-		print(f"--------- STARTING JOB {job_id} ---------")
+		print(f"[scheduler] --------- STARTING JOB {job_id} ---------")
 		active_jobs[job_id] = pending_jobs[job_id]
 		del pending_jobs[job_id]
 		del pending_jobs_order[i]
@@ -338,25 +338,25 @@ def on_worker_finished_work(job_id, worker, state, timed_out):
 	with lock:
 
 		if job_id not in job_workers:
-			print(f"No workers assigned to job '{job_id}', doing nothing, this should only happen when a job is canceled")
+			print(f"[scheduler] No workers assigned to job '{job_id}', doing nothing, this should only happen when a job is canceled")
 			return
 
 		if timed_out:
-			print(f"Worker '{worker}' timed out at {state}")
+			print(f"[scheduler] Worker '{worker}' timed out at {state}")
 		else:
-			print(f"Worker '{worker}' completed work {state}")
+			print(f"[scheduler] Worker '{worker}' completed work {state}")
 		job_completed[job_id].add(state)
-		print(f"Job completed updated: {list(job_completed[job_id])}")
+		print(f"[scheduler] Job completed updated: {list(job_completed[job_id])}")
 
 		job_worker_status[job_id][worker].remove(state)
 
 		if len(job_worker_status[job_id][worker]) == 0:
-			print(f"Worker '{worker}' not busy anymore")
+			print(f"[scheduler] Worker '{worker}' not busy anymore")
 
 
 		could_delegate, current_state, worker_name = try_to_delegate_for_job(job_id, state)
 		if could_delegate is None and has_job_completed_execution(job_id):
-			print(f"--------- FINISHED JOB {job_id} ---------")
+			print(f"[scheduler] --------- FINISHED JOB {job_id} ---------")
 
 			assert all(len(job_worker_status[job_id][k]) == 0 for k in job_worker_status[job_id].keys()) # none of the workers should be busy
 
@@ -398,10 +398,10 @@ def on_job_cancel(job_id):
 		elif job_id in active_jobs.keys():
 			# send requests to workers
 			for worker in job_workers[job_id]:
-				print(f"Stopping worker '{worker}'")
+				print(f"[scheduler] Stopping worker '{worker}'")
 				requests.delete(f'http://{worker}/run')
 
-			print(f"--------- CANCELED JOB {job_id} ---------")
+			print(f"[scheduler] --------- CANCELED JOB {job_id} ---------")
 
 			while len(job_workers[job_id]) > 0:
 				available_workers.add(job_workers[job_id].pop())
