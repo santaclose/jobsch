@@ -51,7 +51,7 @@ def run_from_object(run_object):
 
 	command_string = ' '.join(run_object['command']) if isinstance(run_object['command'], list) else run_object['command']
 
-	print(f"[worker] Starting process for command '{command_string}'")
+	print(f"[worker] Starting process: '{command_string}'")
 
 	try:
 		process = subprocess.Popen(run_object["command"], env=process_env)
@@ -71,7 +71,7 @@ def run_from_object(run_object):
 				return
 
 	except Exception as e:
-		print(f"[worker] Unexpected exception '{repr(e)}'")
+		print(f"[worker] Unexpected exception: '{repr(e)}'")
 
 	# tell scheduler we completed chunk of work
 	request_json = {
@@ -81,7 +81,7 @@ def run_from_object(run_object):
 		'port': port
 	}
 	requests.put(f'http://{scheduler_host}:{scheduler_port}/jobs', json=request_json)
-	print("[worker] Put request to scheduler done")
+	print("[worker] Let scheduler know work has been completed")
 
 
 def run_from_file(file_path):
