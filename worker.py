@@ -18,10 +18,7 @@ port = None
 active_processes = set()
 killing_processes = False
 
-timed_out_dict = dict()
-
 lock = threading.Lock()
-timed_out_dict_lock = threading.Lock()
 
 
 def kill_process(pid):
@@ -37,9 +34,6 @@ def timeout_thread(process, timeout):
 	time.sleep(timeout)
 	if not psutil.pid_exists(process.pid):
 		return
-
-	with timed_out_dict_lock:
-		timed_out_dict[process.pid] = True
 
 	children_killed = kill_process(process.pid)
 	print(f"[worker] Process was killed because of timeout, {children_killed} children processes terminated")
@@ -58,11 +52,9 @@ def run_from_object(run_object):
 	command_string = ' '.join(run_object['command']) if isinstance(run_object['command'], list) else run_object['command']
 
 	print(f"[worker] Starting process for command '{command_string}'")
-	timed_out = False
+
 	try:
 		process = subprocess.Popen(run_object["command"], env=process_env)
-		with timed_out_dict_lock:
-			timed_out_dict[process.pid] = False
 
 		with lock:
 			active_processes.add(process)
@@ -73,10 +65,6 @@ def run_from_object(run_object):
 
 		process.wait()
 
-		timed_out = timed_out_dict[process.pid]
-		with timed_out_dict_lock:
-			del timed_out_dict[process.pid]
-
 		with lock:
 			active_processes.remove(process)
 			if killing_processes:
@@ -85,15 +73,12 @@ def run_from_object(run_object):
 	except Exception as e:
 		print(f"[worker] Unexpected exception '{repr(e)}'")
 
-	print(f"[worker] Process for command '{command_string}' {'timed out' if timed_out else 'finished'}")
-
 	# tell scheduler we completed chunk of work
 	request_json = {
 		'job_id': run_object["job_id"],
 		'state': run_object["state"],
 		'host': host,
-		'port': port,
-		'timed_out': timed_out
+		'port': port
 	}
 	requests.put(f'http://{scheduler_host}:{scheduler_port}/jobs', json=request_json)
 	print("[worker] Put request to scheduler done")

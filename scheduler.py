@@ -334,17 +334,15 @@ def try_to_start_jobs():
 		try_to_delegate_for_job(job_id)
 
 
-def on_worker_finished_work(job_id, worker, state, timed_out):
+def on_worker_finished_work(job_id, worker, state):
 	with lock:
 
 		if job_id not in job_workers:
 			print(f"[scheduler] No workers assigned to job '{job_id}', doing nothing, this should only happen when a job is canceled")
 			return
 
-		if timed_out:
-			print(f"[scheduler] Worker '{worker}' timed out at {state}")
-		else:
-			print(f"[scheduler] Worker '{worker}' completed work {state}")
+		print(f"[scheduler] Worker '{worker}' completed work {state}")
+		
 		job_completed[job_id].add(state)
 		print(f"[scheduler] Job completed updated: {list(job_completed[job_id])}")
 
@@ -457,7 +455,7 @@ def jobs():
 		json_object = flask.request.json
 		worker = f"{json_object['host']}:{json_object['port']}"
 
-		x = threading.Thread(target=on_worker_finished_work, args=(json_object["job_id"], worker, eval(json_object["state"]), json_object["timed_out"],))
+		x = threading.Thread(target=on_worker_finished_work, args=(json_object["job_id"], worker, eval(json_object["state"]),))
 		x.start()
 
 		return "", 200
