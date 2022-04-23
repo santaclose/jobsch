@@ -1,6 +1,7 @@
 import os
 import sys
 import json
+import time
 import flask
 import socket
 import signal
@@ -17,7 +18,32 @@ port = None
 active_processes = set()
 killing_processes = False
 
+timed_out_dict = dict()
+
 lock = threading.Lock()
+timed_out_dict_lock = threading.Lock()
+
+
+def kill_process(pid):
+	children = psutil.Process(pid).children(recursive=True)
+	for child in children:
+		child.kill()
+	os.kill(pid, signal.SIGTERM)
+	return len(children)
+
+
+# Can't use popen timeout cause it doesn't kill children processes
+def timeout_thread(process, timeout):
+	time.sleep(timeout)
+	if not psutil.pid_exists(process.pid):
+		return
+
+	with timed_out_dict_lock:
+		timed_out_dict[process.pid] = True
+
+	children_killed = kill_process(process.pid)
+	print(f"[worker] Process was killed because of timeout, {children_killed} children processes terminated")
+
 
 def run_from_object(run_object):
 	global active_processes
@@ -35,17 +61,27 @@ def run_from_object(run_object):
 	timed_out = False
 	try:
 		process = subprocess.Popen(run_object["command"], env=process_env)
+		with timed_out_dict_lock:
+			timed_out_dict[process.pid] = False
+
 		with lock:
 			active_processes.add(process)
-		process.wait(timeout=None if "timeout" not in run_object.keys() else run_object["timeout"])
+
+		if "timeout" in run_object.keys():
+			x = threading.Thread(target=timeout_thread, args=(process, run_object["timeout"],))
+			x.start()
+
+		process.wait()
+
+		timed_out = timed_out_dict[process.pid]
+		with timed_out_dict_lock:
+			del timed_out_dict[process.pid]
+
 		with lock:
 			active_processes.remove(process)
 			if killing_processes:
-				print("[worker] Process was killed")
 				return
-		
-	except subprocess.TimeoutExpired:
-		timed_out = True
+
 	except Exception as e:
 		print(f"[worker] Unexpected exception '{repr(e)}'")
 
@@ -79,10 +115,8 @@ def run():
 			killing_processes = True
 			temp_list = list(active_processes)
 		for p in temp_list:
-			children = psutil.Process(p.pid).children(recursive=True)
-			for child in children:
-				child.kill()
-			os.kill(p.pid, signal.SIGTERM)
+			children_killed = kill_process(p.pid)
+			print(f"[worker] Process was killed to cancel job, {children_killed} children processes terminated")
 		while True:
 			with lock:
 				all_process_killed = len(active_processes) == 0
