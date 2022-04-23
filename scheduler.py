@@ -337,6 +337,10 @@ def try_to_start_jobs():
 def on_worker_finished_work(job_id, worker, state, timed_out):
 	with lock:
 
+		if job_id not in job_workers:
+			print(f"No workers assigned to job '{job_id}', doing nothing, this should only happen when a job is canceled")
+			return
+
 		if timed_out:
 			print(f"Worker '{worker}' timed out at {state}")
 		else:
@@ -383,6 +387,36 @@ def on_job_added(job_id, job_object):
 
 		try_to_start_jobs()
 
+def on_job_cancel(job_id):
+	with lock:
+
+		if job_id in pending_jobs.keys():
+			del pending_jobs[job_id]
+			pending_jobs_order.remove(job_id)
+
+
+		elif job_id in active_jobs.keys():
+			# send requests to workers
+			for worker in job_workers[job_id]:
+				print(f"Stopping worker '{worker}'")
+				requests.delete(f'http://{worker}/run')
+
+			print(f"--------- CANCELED JOB {job_id} ---------")
+
+			while len(job_workers[job_id]) > 0:
+				available_workers.add(job_workers[job_id].pop())
+
+			del job_workers[job_id]
+			del job_worker_names[job_id]
+			del job_worker_status[job_id]
+			del job_delegated[job_id]
+			del job_completed[job_id]
+
+			del active_jobs[job_id]
+
+			try_to_start_jobs()
+
+
 
 @app.route('/workers', methods=['GET', 'POST'])
 def workers():
@@ -407,7 +441,7 @@ def workers():
 		return json.dumps(output_json, indent=4)
 
 
-@app.route('/jobs', methods=['GET', 'POST', 'PUT'])
+@app.route('/jobs', methods=['GET', 'POST', 'PUT', 'DELETE'])
 def jobs():
 	if flask.request.method == 'POST':
 		job_object = flask.request.json
@@ -425,6 +459,18 @@ def jobs():
 
 		x = threading.Thread(target=on_worker_finished_work, args=(json_object["job_id"], worker, eval(json_object["state"]), json_object["timed_out"],))
 		x.start()
+
+		return "", 200
+	elif flask.request.method == 'DELETE':
+		json_object = flask.request.json
+		job_id = json_object["job_id"]
+
+		with lock:
+			job_exists = job_id in active_jobs.keys() or job_id in pending_jobs.keys()
+		if not job_exists:
+			return "", 400
+
+		on_job_cancel(job_id)
 
 		return "", 200
 	else:

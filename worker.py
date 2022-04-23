@@ -3,6 +3,7 @@ import sys
 import json
 import flask
 import socket
+import signal
 import requests
 import threading
 import subprocess
@@ -12,8 +13,14 @@ app = flask.Flask(__name__)
 host = None
 port = None
 
+active_processes = set()
+killing_processes = False
+
+lock = threading.Lock()
 
 def run_from_object(run_object):
+	global active_processes
+	global killing_processes
 
 	# give subprocess info so it can find other stuff executed by other workers
 	process_env = os.environ.copy()
@@ -26,12 +33,22 @@ def run_from_object(run_object):
 	print(f"Starting process for command '{command_string}'")
 	timed_out = False
 	try:
-		subprocess.run(run_object["command"], env=process_env, timeout=None if "timeout" not in run_object.keys() else run_object["timeout"])
+		process = subprocess.Popen(run_object["command"], env=process_env)
+		with lock:
+			active_processes.add(process)
+		process.wait(timeout=None if "timeout" not in run_object.keys() else run_object["timeout"])
+		with lock:
+			active_processes.remove(process)
+			if killing_processes:
+				print("Process was killed")
+				return
+		
 	except subprocess.TimeoutExpired:
 		timed_out = True
 	except Exception as e:
 		print(f"Unexpected exception '{repr(e)}'")
-	print(f"Process for command '{command_string}' finished.")
+
+	print(f"Process for command '{command_string}' {'timed out' if timed_out else 'finished'}")
 
 	# tell scheduler we completed chunk of work
 	request_json = {
@@ -42,7 +59,7 @@ def run_from_object(run_object):
 		'timed_out': timed_out
 	}
 	requests.put(f'http://{scheduler_host}:{scheduler_port}/jobs', json=request_json)
-	print("Put request to scheduler done:")
+	print("Put request to scheduler done")
 
 
 def run_from_file(file_path):
@@ -51,14 +68,30 @@ def run_from_file(file_path):
 	run_from_object(run_object)
 
 
-@app.route("/run", methods=['POST'])
+@app.route("/run", methods=['POST', 'DELETE'])
 def run():
-	post_object = flask.request.json
-	# print("Running:")
-	# print(json.dumps(post_object, indent=4))
-	x = threading.Thread(target=run_from_object, args=(post_object,))
-	x.start()
-	return "", 200
+	global active_processes
+	global killing_processes
+
+	if flask.request.method == 'DELETE':
+		with lock:
+			killing_processes = True
+			temp_list = list(active_processes)
+		for p in temp_list:
+			os.kill(p.pid, signal.SIGTERM)
+		while True:
+			with lock:
+				all_process_killed = len(active_processes) == 0
+			if all_process_killed:
+				break
+		with lock:
+			killing_processes = False
+		return "", 200
+	else:
+		json_object = flask.request.json
+		x = threading.Thread(target=run_from_object, args=(json_object,))
+		x.start()
+		return "", 200
 
 
 @app.route("/")
