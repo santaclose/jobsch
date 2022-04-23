@@ -4,6 +4,7 @@ import json
 import flask
 import socket
 import signal
+import psutil
 import requests
 import threading
 import subprocess
@@ -78,6 +79,9 @@ def run():
 			killing_processes = True
 			temp_list = list(active_processes)
 		for p in temp_list:
+			children = psutil.Process(p.pid).children(recursive=True)
+			for child in children:
+				child.kill()
 			os.kill(p.pid, signal.SIGTERM)
 		while True:
 			with lock:
