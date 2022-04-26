@@ -299,8 +299,19 @@ def try_to_delegate_for_job(job_id, last_completed_state=None, job_object=None, 
 	assert False
 
 
-def try_to_start_jobs():
+def update_available_workers():
+	temp_list = list(available_workers)
+	for worker in temp_list:
+		try:
+			requests.head(f"http://{worker}", timeout=5)
+		except:
+			available_workers.remove(worker)
+			print(f"[scheduler] Worker {worker} not available anymore")
 
+
+def try_to_start_jobs():
+	
+	update_available_workers()
 	for i in reversed(range(len(pending_jobs_order))):
 
 		job_id = pending_jobs_order[i]
