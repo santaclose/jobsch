@@ -3,10 +3,10 @@ import sys
 import json
 import time
 import flask
-import socket
 import signal
 import psutil
 import requests
+import netifaces
 import threading
 import subprocess
 
@@ -123,11 +123,33 @@ def hello_world():
 
 
 if __name__ == '__main__':
-	if len(sys.argv) < 4:
-		print("[worker] Run: worker.py port scheduler_host scheduler_port")
+	if len(sys.argv) < 5:
+		print("[worker] Run: worker.py port scheduler_host scheduler_port network_interface")
 		exit()
-		
-	host = socket.gethostbyname(socket.gethostname())
+
+	interface_to_use = sys.argv[4]
+	if interface_to_use not in netifaces.interfaces():
+		print(f"[worker] Invalid interface name, available interfaces are:\n")
+		interfaces = netifaces.interfaces()
+		for i in interfaces:
+			if i != "lo":
+				try:
+					netifaces.ifaddresses(i)
+					gws = netifaces.gateways()
+					gateway = gws['default'][netifaces.AF_INET][0]
+					ip = netifaces.ifaddresses(i)[netifaces.AF_INET][0]['addr']
+					sm = netifaces.ifaddresses(i)[netifaces.AF_INET][0]['netmask']
+					print(i)
+					print("    IP address: " + ip)
+					print("    Subnet Mask: " + sm)
+					print("    Gateway: " + gateway)
+					print()
+				except: # Error case for a disconnected Wi-Fi or trying to test a network with no DHCP
+					print(i + " is not connected or DHCP is not available. Try setting a static IP address.")
+		sys.exit()
+
+
+	host = netifaces.ifaddresses(interface_to_use)[netifaces.AF_INET][0]['addr']
 	port = sys.argv[1]
 	scheduler_host = sys.argv[2]
 	scheduler_port = sys.argv[3]
