@@ -147,20 +147,22 @@ def state_is_in_state(job_id, child, parent, job_object=None, is_root_call=True,
 	return False, current_state
 
 
-def get_required_workers_for_job(job_object, is_root_call=True, worker_set=set()):
+def get_required_workers_for_job(job_object, is_root_call=True, worker_set=set(), current_worker=None):
 
 	if is_root_call:
 		worker_set = set()
 
 	if "worker" in job_object.keys():
+		current_worker = job_object["worker"]
 		worker_set.add(job_object["worker"])
 
 	if job_object["type"] != "execute":
 		for i in range(len(job_object["work"])):
-			worker_set = get_required_workers_for_job(job_object["work"][i], False, worker_set)
+			worker_set = get_required_workers_for_job(job_object["work"][i], False, worker_set, current_worker)
 
-	if is_root_call and len(worker_set) == 0:
+	elif current_worker is None:
 		worker_set.add("default_worker_name")
+
 	return worker_set
 
 
@@ -324,6 +326,7 @@ def try_to_start_jobs():
 
 		# Start working on this job
 		print(f"[scheduler] --------- STARTING JOB {job_id} ---------")
+		print(f"[scheduler] Assigning {len(required_worker_names)} workers to job")
 		active_jobs[job_id] = pending_jobs[job_id]
 		del pending_jobs[job_id]
 		del pending_jobs_order[i]
