@@ -1,3 +1,4 @@
+import sys
 import json
 import flask
 import hashlib
@@ -302,8 +303,6 @@ def on_worker_finished_work(job_id, worker, state):
 		print(f"[scheduler] Worker '{worker}' completed work {state}")
 		
 		job_completed[job_id].add(state)
-		print(f"[scheduler] Job completed updated: {list(job_completed[job_id])}")
-
 		job_worker_status[job_id][worker].remove(state)
 
 		if len(job_worker_status[job_id][worker]) == 0:
@@ -432,11 +431,11 @@ def jobs():
 		return json.dumps({"active": [active_jobs[k] for k in active_jobs.keys()], "pending": [pending_jobs[k] for k in pending_jobs.keys()]}, indent=4)
 
 
-
 @app.route("/")
 def hello_world():
 	return "Hello from scheduler"
 
 
 if __name__ == '__main__':
-	app.run(host='0.0.0.0', port=666)
+	port = sys.argv[1]
+	app.run(host='0.0.0.0', port=port)
