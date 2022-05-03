@@ -1,1 +1,1 @@
-python3 worker.py 555 localhost 666 {E2B0EEB7-5539-4AB1-9A13-D9A2C1B9EAB4}
+python3 worker.py "192.168.0.103" 555 localhost 666
