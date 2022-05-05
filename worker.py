@@ -45,9 +45,10 @@ def run_from_object(run_object):
 	global killing_processes
 	global current_job
 
-	if current_job is None or current_job != run_object["job_id"]:
-		current_job = run_object["job_id"]
-		print(f"[scheduler] --------- SWITCHED TO JOB {current_job} ---------")
+	with lock:
+		if current_job is None or current_job != run_object["job_id"]:
+			current_job = run_object["job_id"]
+			print(f"[scheduler] --------- SWITCHED TO JOB {current_job} ---------")
 
 	# give subprocess info so it can find other stuff executed by other workers
 	process_env = os.environ.copy()
