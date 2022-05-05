@@ -19,6 +19,8 @@ killing_processes = False
 
 lock = threading.Lock()
 
+job_being_worked_on = None
+
 
 def kill_process(pid):
 	children = psutil.Process(pid).children(recursive=True)
@@ -41,6 +43,11 @@ def timeout_thread(process, timeout):
 def run_from_object(run_object):
 	global active_processes
 	global killing_processes
+	global job_being_worked_on
+
+	if job_being_worked_on is None or job_being_worked_on != run_object["job_id"]:
+		job_being_worked_on = run_object["job_id"]
+		print(f"[scheduler] --------- SWITCHED TO JOB {job_being_worked_on} ---------")
 
 	# give subprocess info so it can find other stuff executed by other workers
 	process_env = os.environ.copy()
