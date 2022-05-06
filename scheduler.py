@@ -15,7 +15,7 @@ pending_jobs = dict() # holds job id and job object
 active_jobs = dict() # holds job id and job object
 
 job_workers = dict()
-job_worker_names = dict()
+job_roles = dict()
 job_worker_status = dict()
 job_delegated = dict()
 job_completed = dict()
@@ -139,26 +139,26 @@ def state_is_in_state(job_id, child, parent, job_object=None, entered_parent_sta
 	return False
 
 
-def get_required_workers_for_job(job_object, worker_set=None, current_worker=None):
+def get_required_roles_for_job(job_object, roles_set=None, current_role=None):
 
-	if worker_set is None:
-		worker_set = set()
+	if roles_set is None:
+		roles_set = set()
 
-	if "worker" in job_object.keys():
-		current_worker = job_object["worker"]
-		worker_set.add(job_object["worker"])
+	if "role" in job_object.keys():
+		current_role = job_object["role"]
+		roles_set.add(job_object["role"])
 
 	if job_object["type"] != "execute":
 		for i in range(len(job_object["work"])):
-			worker_set = get_required_workers_for_job(job_object["work"][i], worker_set, current_worker)
+			roles_set = get_required_roles_for_job(job_object["work"][i], roles_set, current_role)
 
-	elif current_worker is None:
-		worker_set.add("default_worker_name")
+	elif current_role is None:
+		roles_set.add("default_role")
 
-	return worker_set
+	return roles_set
 
 
-def try_to_delegate_for_job(job_id, last_completed_state=None, job_object=None, worker_name="default_worker_name"):
+def try_to_delegate_for_job(job_id, last_completed_state=None, job_object=None, role="default_role"):
 
 	# return values:
 	#  None means skipping delegation
@@ -171,15 +171,15 @@ def try_to_delegate_for_job(job_id, last_completed_state=None, job_object=None, 
 
 	current_state = job_object["state"]
 
-	if "worker" in job_object.keys():
-		worker_name = job_object["worker"]
+	if "role" in job_object.keys():
+		role = job_object["role"]
 
 	if job_object["type"] == "execute":
 
 		if current_state not in job_delegated[job_id]:
-			target_worker = job_worker_names[job_id][worker_name]
+			target_worker = job_roles[job_id][role]
 			target_url = f'http://{target_worker}/run'
-			print(f"[scheduler] Delegating work {current_state} to worker '{target_url}'")
+			print(f"[scheduler] Delegating work {current_state} to worker '{target_worker}'")
 			run_object = {
 				"command": job_object["command"],
 				"state": repr(current_state),
@@ -199,7 +199,7 @@ def try_to_delegate_for_job(job_id, last_completed_state=None, job_object=None, 
 	if job_object["type"] == "sequence_group":
 
 		for i in range(len(job_object["work"])):
-			could_delegate = try_to_delegate_for_job(job_id, last_completed_state, job_object["work"][i], worker_name)
+			could_delegate = try_to_delegate_for_job(job_id, last_completed_state, job_object["work"][i], role)
 			if could_delegate is not None:
 				return could_delegate
 
@@ -212,7 +212,7 @@ def try_to_delegate_for_job(job_id, last_completed_state=None, job_object=None, 
 			parallel_group_state = current_state
 			delegation_results = []
 			for i in range(len(job_object["work"])):
-				could_delegate = try_to_delegate_for_job(job_id, last_completed_state, job_object["work"][i], worker_name)
+				could_delegate = try_to_delegate_for_job(job_id, last_completed_state, job_object["work"][i], role)
 				delegation_results.append(could_delegate)
 
 			assert all(x for x in delegation_results)
@@ -232,7 +232,7 @@ def try_to_delegate_for_job(job_id, last_completed_state=None, job_object=None, 
 						print(f"[scheduler] Skipping parallel group branch at {child_state} as it doesn't contain {last_completed_state}")
 						continue
 					
-					could_delegate = try_to_delegate_for_job(job_id, last_completed_state, job_object["work"][i], worker_name)
+					could_delegate = try_to_delegate_for_job(job_id, last_completed_state, job_object["work"][i], role)
 					if could_delegate is None: # whole branch has been completely delegated
 						print("[scheduler] Not delegating work")
 						return False
@@ -262,26 +262,42 @@ def try_to_start_jobs():
 		job_id = pending_jobs_order[i]
 		job_object = pending_jobs[job_id]
 
-		required_worker_names = get_required_workers_for_job(job_object)
-		number_of_required_workers = len(required_worker_names)
-		if len(available_workers) < number_of_required_workers:
+		required_roles = get_required_roles_for_job(job_object)
+		number_of_required_workers = len(required_roles)
+
+		chosen_workers = []
+		for role in required_roles:
+			found_suitable_worker = False
+			for worker in available_workers:
+				if requests.get(f"http://{worker}/suits_role?role={role}").json()["result"]:
+					print(f"[scheduler] Found worker to work as '{role}'")
+					chosen_workers.append(worker)
+					available_workers.remove(worker)
+					found_suitable_worker = True
+					break
+			if not found_suitable_worker:
+				print(f"[scheduler] Couldn't find worker to work as '{role}'")
+				break
+		if len(chosen_workers) < number_of_required_workers:
+			print(f"[scheduler] Couldn't find enough workers for job '{job_id}'")
+			for item in chosen_workers: # revert
+				available_workers.add(item)
 			continue
 
 		# Start working on this job
 		print(f"[scheduler] --------- STARTING JOB {job_id} ---------")
-		print(f"[scheduler] Assigning {len(required_worker_names)} workers to job")
+		print(f"[scheduler] Assigning {len(required_roles)} workers to job")
 		active_jobs[job_id] = pending_jobs[job_id]
 		compute_states(active_jobs[job_id])
 
 		del pending_jobs[job_id]
 		del pending_jobs_order[i]
 
-		chosen_workers = [available_workers.pop() for i in range(len(required_worker_names))]
 		job_workers[job_id] = set(chosen_workers)
-		for i, worker_name in enumerate(required_worker_names):
-			if job_id not in job_worker_names.keys():
-				job_worker_names[job_id] = dict()
-			job_worker_names[job_id][worker_name] = chosen_workers[i]
+		for i, role in enumerate(required_roles):
+			if job_id not in job_roles.keys():
+				job_roles[job_id] = dict()
+			job_roles[job_id][role] = chosen_workers[i]
 
 		job_worker_status[job_id] = dict()
 		for worker in chosen_workers:
@@ -318,7 +334,7 @@ def on_worker_finished_work(job_id, worker, state):
 				available_workers.add(job_workers[job_id].pop())
 
 			del job_workers[job_id]
-			del job_worker_names[job_id]
+			del job_roles[job_id]
 			del job_worker_status[job_id]
 			del job_delegated[job_id]
 			del job_completed[job_id]
@@ -362,7 +378,7 @@ def on_job_cancel(job_id):
 				available_workers.add(job_workers[job_id].pop())
 
 			del job_workers[job_id]
-			del job_worker_names[job_id]
+			del job_roles[job_id]
 			del job_worker_status[job_id]
 			del job_delegated[job_id]
 			del job_completed[job_id]
@@ -387,10 +403,10 @@ def workers():
 			"available": list(available_workers),
 			"working": {}
 		}
-		for job_id in job_worker_names.keys():
+		for job_id in job_roles.keys():
 			output_json["working"][job_id] = {}
-			for worker_name in job_worker_names[job_id]:
-				output_json["working"][job_id][worker_name] = job_worker_names[job_id][worker_name]
+			for role in job_roles[job_id]:
+				output_json["working"][job_id][role] = job_roles[job_id][role]
 
 		return json.dumps(output_json, indent=4)
 

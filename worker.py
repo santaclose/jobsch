@@ -124,6 +124,18 @@ def run():
 		return "", 200
 
 
+@app.route("/suits_role")
+def suits_role():
+	role = flask.request.args.get('role')
+	assert role is not None
+
+	if not os.path.exists("suits_role.py"):
+		return json.dumps({"result": True}, indent=4)
+
+	result = subprocess.call([sys.executable, "suits_role.py", role]) == 0
+	return json.dumps({"result": result}, indent=4)
+
+
 @app.route("/")
 def hello_world():
 	return "Hello from worker"
