@@ -4,7 +4,7 @@
 	[
 		{
 			"type": "sequence_group",
-			"worker": "1",
+			"role": "1",
 			"work":
 			[
 				{
@@ -37,7 +37,7 @@
 		},
 		{
 			"type": "sequence_group",
-			"worker": "0",
+			"role": "0",
 			"work":
 			[
 				{

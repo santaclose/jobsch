@@ -8,17 +8,17 @@
 			[
 				{
 					"type": "execute",
-					"worker": "server",
+					"role": "server",
 					"command": ["python", "testing/dummy_server.py", "234", "2"]
 				},
 				{
 					"type": "execute",
-					"worker": "client 0",
+					"role": "client 0",
 					"command": ["python", "testing/dummy_client.py", "235", "234"]
 				},
 				{
 					"type": "execute",
-					"worker": "client 1",
+					"role": "client 1",
 					"command": ["python", "testing/dummy_client.py", "236", "234"]
 				}
 			]

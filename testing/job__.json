@@ -8,17 +8,17 @@
 			[
 				{
 					"type": "execute",
-					"worker": "server 0",
+					"role": "server 0",
 					"command": ["python", "testing/dummy.py", "2"]
 				},
 				{
 					"type": "execute",
-					"worker": "client 0",
+					"role": "client 0",
 					"command": ["python", "testing/dummy.py", "4"]
 				},
 				{
 					"type": "execute",
-					"worker": "client 1",
+					"role": "client 1",
 					"command": ["python", "testing/dummy.py", "3"]
 				}
 			]
@@ -29,17 +29,17 @@
 			[
 				{
 					"type": "execute",
-					"worker": "server 0",
+					"role": "server 0",
 					"command": ["python", "testing/dummy.py", "5"]
 				},
 				{
 					"type": "execute",
-					"worker": "client 0",
+					"role": "client 0",
 					"command": ["python", "testing/dummy.py", "5"]
 				},
 				{
 					"type": "execute",
-					"worker": "client 1",
+					"role": "client 1",
 					"command": ["python", "testing/dummy.py", "5"]
 				}
 			]
@@ -50,17 +50,17 @@
 			[
 				{
 					"type": "execute",
-					"worker": "server 0",
+					"role": "server 0",
 					"command": ["python", "testing/dummy.py", "1"]
 				},
 				{
 					"type": "execute",
-					"worker": "client 0",
+					"role": "client 0",
 					"command": ["python", "testing/dummy.py", "1"]
 				},
 				{
 					"type": "execute",
-					"worker": "client 1",
+					"role": "client 1",
 					"command": ["python", "testing/dummy.py", "1"]
 				}
 			]
