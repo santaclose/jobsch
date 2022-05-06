@@ -25,7 +25,7 @@
 			"program": "${workspaceFolder}/worker.py",
 			"console": "integratedTerminal",
 			"args": [
-				"555", "localhost", "666", "{E2B0EEB7-5539-4AB1-9A13-D9A2C1B9EAB4}"
+				"192.168.0.105", "555", "localhost", "666"
 			]
 		},
 		{
@@ -35,7 +35,7 @@
 			"program": "${workspaceFolder}/worker.py",
 			"console": "integratedTerminal",
 			"args": [
-				"222", "localhost", "666", "{E2B0EEB7-5539-4AB1-9A13-D9A2C1B9EAB4}"
+				"192.168.0.105", "222", "localhost", "666"
 			]
 		},
 		{
@@ -45,7 +45,7 @@
 			"program": "${workspaceFolder}/worker.py",
 			"console": "integratedTerminal",
 			"args": [
-				"333", "localhost", "666", "{E2B0EEB7-5539-4AB1-9A13-D9A2C1B9EAB4}"
+				"192.168.0.105", "333", "localhost", "666"
 			]
 		},
         {
