@@ -254,6 +254,47 @@ def update_available_workers():
 			print(f"[scheduler] Worker {worker} not available anymore")
 
 
+def assign_roles_to_workers(required_roles_list, worker_can_work_as, assignment=None):
+	is_root_call = False
+	if assignment is None:
+		is_root_call = True
+		assignment = {}
+
+	role_with_least_possible_workers = None
+	workers_for_role_with_least_possible_workers = None
+	for i, role in enumerate(required_roles_list):
+		possible_workers_for_role = []
+		for worker in worker_can_work_as.keys():
+			if worker_can_work_as[worker][i]:
+				possible_workers_for_role.append(worker)
+		if len(possible_workers_for_role) == 0:
+			return None if is_root_call else False
+		if workers_for_role_with_least_possible_workers is None or len(possible_workers_for_role) < len(workers_for_role_with_least_possible_workers):
+			workers_for_role_with_least_possible_workers = possible_workers_for_role
+			role_with_least_possible_workers = role
+	
+	assignment[role_with_least_possible_workers] = workers_for_role_with_least_possible_workers[0]
+	if len(required_roles_list) == 1 and required_roles_list[0] == role_with_least_possible_workers: # base case
+		return assignment if is_root_call else True
+
+	index_of_role_to_delete = required_roles_list.index(role_with_least_possible_workers)
+
+	required_roles_sub_list = [x for x in required_roles_list if x not in assignment.keys()]
+	worker_can_work_as_sub_dict = {}
+	for k in worker_can_work_as.keys():
+		if k in assignment.values():
+			continue
+		new_list = worker_can_work_as[k].copy()
+		del new_list[index_of_role_to_delete]
+		worker_can_work_as_sub_dict[k] = new_list
+
+
+	res = assign_roles_to_workers(required_roles_sub_list, worker_can_work_as_sub_dict, assignment)
+	if is_root_call:
+		return assignment if res else None
+	return res
+
+
 def try_to_start_jobs():
 	
 	update_available_workers()
@@ -263,25 +304,18 @@ def try_to_start_jobs():
 		job_object = pending_jobs[job_id]
 
 		required_roles = get_required_roles_for_job(job_object)
-		number_of_required_workers = len(required_roles)
+		if len(available_workers) < len(required_roles):
+			print(f"[scheduler] Not enough workers for {len(required_roles)} roles")
+			continue
 
-		chosen_workers = []
-		for role in required_roles:
-			found_suitable_worker = False
-			for worker in available_workers:
-				if requests.get(f"http://{worker}/suits_role?role={role}").json()["result"]:
-					print(f"[scheduler] Found worker to work as '{role}'")
-					chosen_workers.append(worker)
-					available_workers.remove(worker)
-					found_suitable_worker = True
-					break
-			if not found_suitable_worker:
-				print(f"[scheduler] Couldn't find worker to work as '{role}'")
-				break
-		if len(chosen_workers) < number_of_required_workers:
-			print(f"[scheduler] Couldn't find enough workers for job '{job_id}'")
-			for item in chosen_workers: # revert
-				available_workers.add(item)
+		required_roles_list = list(required_roles)
+		worker_can_work_as = {}
+		for worker in available_workers:
+			worker_can_work_as[worker] = requests.get(f"http://{worker}/suits_roles?roles={required_roles_list}").json()["result"]
+
+		role_assignment = assign_roles_to_workers(required_roles_list, worker_can_work_as)
+		if role_assignment is None:
+			print(f"[scheduler] No possible way to assign required roles to workers")
 			continue
 
 		# Start working on this job
@@ -293,15 +327,13 @@ def try_to_start_jobs():
 		del pending_jobs[job_id]
 		del pending_jobs_order[i]
 
-		job_workers[job_id] = set(chosen_workers)
-		for i, role in enumerate(required_roles):
-			if job_id not in job_roles.keys():
-				job_roles[job_id] = dict()
-			job_roles[job_id][role] = chosen_workers[i]
+		job_workers[job_id] = set(role_assignment.values())
+		job_roles[job_id] = role_assignment
 
 		job_worker_status[job_id] = dict()
-		for worker in chosen_workers:
+		for worker in role_assignment.values():
 			job_worker_status[job_id][worker] = set()
+			available_workers.remove(worker)
 
 		job_delegated[job_id] = set()
 		job_completed[job_id] = set()

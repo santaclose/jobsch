@@ -7,6 +7,7 @@ import signal
 import psutil
 import requests
 import threading
+import importlib
 import subprocess
 
 app = flask.Flask(__name__)
@@ -124,15 +125,18 @@ def run():
 		return "", 200
 
 
-@app.route("/suits_role")
-def suits_role():
-	role = flask.request.args.get('role')
-	assert role is not None
+@app.route("/suits_roles")
+def suits_roles():
+	roles = eval(flask.request.args.get('roles'))
+	assert isinstance(roles, list)
 
 	if not os.path.exists("suits_role.py"):
-		return json.dumps({"result": True}, indent=4)
+		return json.dumps({"result": [True for x in roles]}, indent=4)
 
-	result = subprocess.call([sys.executable, "suits_role.py", role]) == 0
+	import suits_role
+	importlib.reload(suits_role)
+	result = [suits_role.can_work_as(x) for x in roles]
+	
 	return json.dumps({"result": result}, indent=4)
 
 
