@@ -20,6 +20,7 @@ simplest job:
 
 #### sequence groups
 they can be used to group work that needs to be executed in sequence.
+
 example:
 ```json
 {
@@ -40,6 +41,7 @@ example:
 
 #### parallel groups
 they can be used to group work that needs to be executed in parallel.
+
 example:
 ```json
 {
@@ -63,6 +65,7 @@ parallel and sequence groups can be nested in any way to create complex jobs
 #### roles
 
 roles allow you to execute parts of the job on different workers
+
 example:
 ```json
 {
@@ -89,6 +92,7 @@ example:
 - workers are allocated before the job starts executing so only one worker plays each role
 
 by default workers will work for any role, but this can be changed for each worker by creating a `suits_role.py` file where the `worker.py` file is and implementing a `can_work_as(role)` function in it
+
 example `suits_role.py` file:
 ```py
 def can_work_as(role):
