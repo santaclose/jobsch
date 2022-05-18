@@ -49,7 +49,7 @@ def run_from_object(run_object):
 	with lock:
 		if current_job is None or current_job != run_object["job_id"]:
 			current_job = run_object["job_id"]
-			print(f"[scheduler] --------- SWITCHED TO JOB {current_job} ---------")
+			print(f"[worker] --------- SWITCHED TO JOB {current_job} ---------")
 
 	# give subprocess info so it can find other stuff executed by other workers
 	process_env = os.environ.copy()
