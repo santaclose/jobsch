@@ -53,6 +53,7 @@ def run_from_object(run_object):
 
 	# give subprocess info so it can find other stuff executed by other workers
 	process_env = os.environ.copy()
+	process_env["worker_role"] = run_object["role"]
 	process_env["worker_job_id"] = run_object["job_id"]
 	process_env["scheduler_host"] = scheduler_host
 	process_env["scheduler_port"] = scheduler_port

@@ -183,7 +183,8 @@ def try_to_delegate_for_job(job_id, last_completed_state=None, job_object=None, 
 			run_object = {
 				"command": job_object["command"],
 				"state": repr(current_state),
-				"job_id": job_id
+				"job_id": job_id,
+				"role": role
 			}
 			if "timeout" in job_object.keys():
 				run_object["timeout"] = job_object["timeout"]
