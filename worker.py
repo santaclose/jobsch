@@ -79,6 +79,7 @@ def run_from_object(run_object):
 			if killing_processes:
 				return
 
+	# these exceptions are not under our control
 	except Exception as e:
 		print(f"[worker] Unexpected exception: '{repr(e)}'")
 

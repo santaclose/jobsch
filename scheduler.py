@@ -179,7 +179,7 @@ def try_to_delegate_for_job(job_id, last_completed_state=None, job_object=None, 
 		if current_state not in job_delegated[job_id]:
 			target_worker = job_roles[job_id][role]
 			target_url = f'http://{target_worker}/run'
-			print(f"[scheduler] Delegating work {current_state} to worker '{target_worker}'")
+			print(f"[scheduler] Delegating work {current_state} to worker '{target_worker}' for job '{job_id}'")
 			run_object = {
 				"command": job_object["command"],
 				"state": repr(current_state),
@@ -193,7 +193,7 @@ def try_to_delegate_for_job(job_id, last_completed_state=None, job_object=None, 
 			job_delegated[job_id].add(current_state)
 			return True # could delegate
 		else:
-			print(f"[scheduler] Skipping already delegated state: {current_state}")
+			# print(f"[scheduler] Skipping already delegated state: {current_state}")
 			return None # don't have to delegate
 
 
@@ -230,7 +230,7 @@ def try_to_delegate_for_job(job_id, last_completed_state=None, job_object=None, 
 
 					# find which branch we are in
 					if not state_is_in_state(job_id, last_completed_state, child_state):
-						print(f"[scheduler] Skipping parallel group branch at {child_state} as it doesn't contain {last_completed_state}")
+						# print(f"[scheduler] Skipping parallel group branch at {child_state} as it doesn't contain {last_completed_state}")
 						continue
 					
 					could_delegate = try_to_delegate_for_job(job_id, last_completed_state, job_object["work"][i], role)
@@ -349,7 +349,7 @@ def on_worker_finished_work(job_id, worker, state):
 			print(f"[scheduler] No workers assigned to job '{job_id}', doing nothing, this should only happen when a job is canceled")
 			return
 
-		print(f"[scheduler] Worker '{worker}' completed work {state}")
+		print(f"[scheduler] Worker '{worker}' completed work {state} for job '{job_id}'")
 		
 		job_completed[job_id].add(state)
 		job_worker_status[job_id][worker].remove(state)
