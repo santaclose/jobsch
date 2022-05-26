@@ -15,19 +15,18 @@ clients = []
 
 def on_client_connected(client):
 
-	print("Detected new client")
-	print(client)
+	print(f"[dummy_server] Detected new client: {client}")
 
 	with lock:
 		clients.append(client)
 		if len(clients) == clients_expected:
-			print("Shutting down everything")
+			print("[dummy_server] Shutting down everything")
 			for c in clients:
 				try:
 					requests.get(f'http://{c}/', timeout=0.001) # tell client to exit
 				except:
 					pass
-			print("Exiting")
+			print("[dummy_server] Exiting")
 			os._exit(0)
 
 

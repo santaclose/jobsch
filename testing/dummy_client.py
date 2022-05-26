@@ -13,7 +13,7 @@ app = flask.Flask(__name__)
 @app.route('/', methods=['GET'])
 def endpoint():
 
-	print("Exiting")
+	print("[dummy_client] Exiting")
 	os._exit(0)
 
 	return "", 200
@@ -37,8 +37,7 @@ if __name__ == '__main__':
 	server_worker = workers["working"][worker_job_id]["server"]
 	server_worker_host = server_worker.split(':')[0]
 
-	print("Client connecting to server")
-	print(f"http://{server_worker_host}:{server_port}")
+	print(f"[dummy_client] Connecting to server: http://{server_worker_host}:{server_port}")
 	requests.post(f"http://{server_worker_host}:{server_port}/", json={'host': host, 'port': port})
 
 	app.run(host='0.0.0.0', port=port)
