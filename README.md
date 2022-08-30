@@ -1,6 +1,6 @@
 # jobsch
 
-this is a job scheduler
+this is a job scheduler, it allows you to run commands on different machines in an organized way by creating sequential and parallel groups
 
 ## concepts
 
