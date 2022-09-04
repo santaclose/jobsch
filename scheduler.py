@@ -1,3 +1,4 @@
+import os
 import sys
 import json
 import flask
@@ -7,6 +8,9 @@ import datetime
 import threading
 
 app = flask.Flask(__name__)
+
+KNOWN_WORKERS_FILE_PATH = "known_workers.json"
+WORKER_AVAILABILITY_TIMEOUT = 5
 
 available_workers = set()
 
@@ -245,11 +249,11 @@ def try_to_delegate_for_job(job_id, last_completed_state=None, job_object=None, 
 	assert False
 
 
-def update_available_workers():
+def refresh_available_workers():
 	temp_list = list(available_workers)
 	for worker in temp_list:
 		try:
-			requests.head(f"http://{worker}", timeout=5)
+			requests.head(f"http://{worker}", timeout=WORKER_AVAILABILITY_TIMEOUT)
 		except:
 			available_workers.remove(worker)
 			print(f"[scheduler] Worker {worker} not available anymore")
@@ -298,7 +302,7 @@ def assign_roles_to_workers(required_roles_list, worker_can_work_as, assignment=
 
 def try_to_start_jobs():
 	
-	update_available_workers()
+	refresh_available_workers()
 	for i in reversed(range(len(pending_jobs_order))):
 
 		job_id = pending_jobs_order[i]
@@ -379,6 +383,18 @@ def on_worker_finished_work(job_id, worker, state):
 
 def on_worker_connected(worker):
 	with lock:
+		if os.path.exists(KNOWN_WORKERS_FILE_PATH):
+			with open(KNOWN_WORKERS_FILE_PATH, 'r+') as known_workers_file:
+				known_workers = json.loads(known_workers_file.read())
+				known_workers_file.seek(0)
+				known_workers = set(known_workers)
+				known_workers.add(worker)
+				known_workers_file.write(json.dumps(list(known_workers)))
+				known_workers_file.truncate()
+		else:
+			with open(KNOWN_WORKERS_FILE_PATH, 'w') as known_workers_file:
+				known_workers_file.write(json.dumps([worker]))
+
 		available_workers.add(worker)
 		try_to_start_jobs()
 
@@ -497,7 +513,7 @@ def update_workers():
 			return "Cannot update while jobs are being executed", 409
 		if 'file' not in flask.request.files:
 			return "", 400
-		update_available_workers()
+		refresh_available_workers()
 		new_worker_file_bytes = flask.request.files['file'].read()
 		temp_list = list(available_workers)
 		failed_workers = []
@@ -520,5 +536,13 @@ def hello_world():
 
 
 if __name__ == '__main__':
+	if os.path.exists(KNOWN_WORKERS_FILE_PATH):
+		print("[scheduler] Loading known workers from file")
+		with open(KNOWN_WORKERS_FILE_PATH, 'r+') as known_workers_file:
+			known_workers = json.loads(known_workers_file.read())
+		for worker in known_workers:
+			available_workers.add(worker)
+		refresh_available_workers()
+
 	port = sys.argv[1]
 	app.run(host='0.0.0.0', port=port)
