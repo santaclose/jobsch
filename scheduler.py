@@ -480,6 +480,40 @@ def jobs():
 		return json.dumps({"active": [active_jobs[k] for k in active_jobs.keys()], "pending": [pending_jobs[k] for k in pending_jobs.keys()]}, indent=4)
 
 
+@app.route("/update_workers", methods=['GET', 'POST'])
+def update_workers():
+	if flask.request.method == 'GET':
+		return '''
+		<!doctype html>
+		<title>Update workers</title>
+		<h1>Upload worker.py file</h1>
+		<form method=post enctype=multipart/form-data>
+			<input type=file name=file>
+			<input type=submit value=Upload>
+		</form>
+		'''
+	else: # POST
+		if len(active_jobs.keys()) > 0 or len(pending_jobs.keys()) > 0:
+			return "Cannot update while jobs are being executed", 409
+		if 'file' not in flask.request.files:
+			return "", 400
+		update_available_workers()
+		new_worker_file_bytes = flask.request.files['file'].read()
+		temp_list = list(available_workers)
+		failed_workers = []
+		for worker in temp_list:
+			try:
+				print(f"[scheduler] Updating worker: {worker}")
+				requests.post(f"http://{worker}/update", files={"file": new_worker_file_bytes})
+			except Exception as e:
+				print(f"[scheduler] Failed to update worker {worker}: {e}")
+				failed_workers.append(worker)
+
+		if len(failed_workers) > 0:
+			return "Failed to update workers " + ", ".join(failed_workers), 500
+		return "", 200
+
+
 @app.route("/")
 def hello_world():
 	return "Hello from scheduler"

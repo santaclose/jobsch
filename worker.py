@@ -5,6 +5,7 @@ import time
 import flask
 import signal
 import psutil
+import hashlib
 import requests
 import threading
 import importlib
@@ -142,9 +143,32 @@ def suits_roles():
 	return json.dumps({"result": result}, indent=4)
 
 
+def update_thread():
+	time.sleep(0.1) # wait for the http response to be sent
+	os.execl(sys.executable, *([sys.executable] + sys.argv))
+
+@app.route("/update", methods=['POST'])
+def update():
+	if len(active_processes) > 0:
+		return "Cannot update while subprocesses are running", 409
+	if 'file' not in flask.request.files:
+		return "", 400
+	print(f"[worker] Updating")
+	updated_file = flask.request.files['file']
+	updated_file_contents = updated_file.read()
+	print(f"[worker] Received update file with length: {len(updated_file_contents)}")
+	with open("worker.py", 'wb') as worker_file:
+		worker_file.write(updated_file_contents)
+	x = threading.Thread(target=update_thread)
+	x.start()
+	return "", 200
+
+
 @app.route("/")
 def hello_world():
-	return "Hello from worker"
+	with open("worker.py", 'rb') as worker_file:
+		file_md5_hash = hashlib.md5(worker_file.read()).hexdigest()
+	return json.dumps({"worker_file_md5": file_md5_hash})
 
 
 if __name__ == '__main__':
