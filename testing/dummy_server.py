@@ -23,8 +23,9 @@ def on_client_connected(client):
 			print("[dummy_server] Shutting down everything")
 			for c in clients:
 				try:
-					requests.get(f'http://{c}/', timeout=0.001) # tell client to exit
-				except:
+					requests.get(f'http://{c}/') # tell client to exit
+				except Exception as e:
+					assert "An existing connection was forcibly closed by the remote host" in repr(e)
 					pass
 			print("[dummy_server] Exiting")
 			os._exit(0)
